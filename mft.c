@@ -2,8 +2,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "datarun.h"
 #include "mftutil.h"
 #include "util.h"
+
+datarun_s *mftDataRuns = NULL;
 
 u8 *goToNextAttrib(u8 *curr) {    
     // Are we seeking to the first attribute?
@@ -32,8 +35,7 @@ u8 *getDataPtr(u8 *curr) {
     }
 
     if (attr->nonResident) {
-        // Ignore non-resident attributes for now...
-        return NULL;
+        return curr + 0x40;
     }
 
     return curr + 0x18;
@@ -75,6 +77,7 @@ void walkAttributes(mft_s *mftEntry, file_s *fileStruct) {
 
             if (attr->nonResident) {
                 fileStruct->fileSize = *(u64 *)(currAttrib + 0x30);
+                fileStruct->dataruns = InitializeRuns(getDataPtr(currAttrib));
             } else {
                 fileStruct->fileSize = *(u64 *)(currAttrib + 0x10);
             }
@@ -87,16 +90,22 @@ void walkAttributes(mft_s *mftEntry, file_s *fileStruct) {
     }
 }
 
-u64 getNumMFTEntries() {
-    mft_s mft;
-    readMFTEntryAt(&mft, 0);
+u8 getFileHandle(mft_s *outMFTEntry, file_s *outFile, u64 mftEntryNum) {
+    readMFTEntryAt(outMFTEntry, mftEntryNum);
+    if (!verifyMFTEntry(outMFTEntry)) {
+        return 0;
+    }
 
-    file_s fileStruct;
-    walkAttributes(&mft, &fileStruct);
+    // ..The below may happen naturally if the fixup sequence occurs where the MFT entry num would usually take place
+    /*
+    if (outMFTEntry->mftEntryNum != mftEntryNum) {
+        fprintf(stderr, "Hoped to find MFT entry %llu; found %d instead.", mftEntryNum, outMFTEntry->mftEntryNum);
+        exit(EXIT_FAILURE);
+    }*/
 
-    u64 numEntries = fileStruct.fileSize / MFT_SIZE;
-    printf("The MFT is %llu bytes long. There are %llu MFT entries.\n", fileStruct.fileSize, numEntries);
-    return numEntries;
+    walkAttributes(outMFTEntry, outFile);
+
+    return 1;
 }
 
 filename_attr_s *pickFileName(file_s *fileStruct) {
@@ -112,13 +121,11 @@ filename_attr_s *pickFileName(file_s *fileStruct) {
 
 u8 printMFTEntry(u64 mftEntryNum, TreeNode *tree) {
     mft_s mftEntry;
-    readMFTEntryAt(&mftEntry, mftEntryNum);
-    if (!verifyMFTEntry(&mftEntry)) {
+    file_s fileStruct;
+    if (!getFileHandle(&mftEntry, &fileStruct, mftEntryNum)) {
         return 0;
     }
 
-    file_s fileStruct;
-    walkAttributes(&mftEntry, &fileStruct);
     filename_attr_s *filename = pickFileName(&fileStruct);
 
     if (!filename && !mftEntry.baseMFTEntry) {
@@ -140,11 +147,20 @@ u8 printMFTEntry(u64 mftEntryNum, TreeNode *tree) {
     // putchar('\n');
     // free(name);
 
+    DeleteRuns(fileStruct.dataruns);
+
     return 1;
 }
 
 void printMFTEntries() {
-    u64 numEntries = getNumMFTEntries();
+    mft_s selfEntry;
+    file_s mftFile;
+    getFileHandle(&selfEntry, &mftFile, 0);
+    mftDataRuns = mftFile.dataruns;
+
+    u64 numEntries = mftFile.fileSize / MFT_SIZE;
+    printf("The MFT is %llu bytes long. There are %llu MFT entries.\n", mftFile.fileSize, numEntries);
+
     TreeNode *tree = PrepareTree((u32)numEntries);
 
     for (u64 i = 0; i < numEntries; i++) {
@@ -153,4 +169,7 @@ void printMFTEntries() {
 
     PrintTree(tree);
     DeleteTree(tree, (u32)numEntries);
+
+    DeleteRuns(mftFile.dataruns);
+    mftDataRuns = NULL;
 }

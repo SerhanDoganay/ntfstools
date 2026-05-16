@@ -1,6 +1,7 @@
 #ifndef __MFT_H
 #define __MFT_H
 
+#include "datarun.h"
 #include "types.h"
 
 #define MFT_SIZE 1024
@@ -69,6 +70,7 @@ typedef struct {
 
 typedef struct {
     filename_attr_s *filenames[4];
+    datarun_s *dataruns;
     u64 fileSize;
     u64 parent;
 } file_s;

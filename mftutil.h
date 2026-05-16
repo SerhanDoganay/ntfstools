@@ -1,9 +1,11 @@
 #ifndef __MFTUTIL_H
 #define __MFTUTIL_H
 
+#include "datarun.h"
 #include "mft.h"
 
 extern u64 mftStart; // byte address to the start of the MFT in the NTFS partition
+extern datarun_s *mftDataRuns;
 
 void goToMFTEntry(u64 mftEntry);
 void readMFTEntry(mft_s *mftStruct);

@@ -3,11 +3,29 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "datarun.h"
+#include "ntfsutil.h"
 #include "types.h"
 #include "util.h"
 
 void goToMFTEntry(u64 mftEntry) {
-    if (lseek64(fd, partitionStart + mftStart + mftEntry * MFT_SIZE, SEEK_SET) == -1) {
+    u64 byteAddress = 0;
+    
+    if (mftDataRuns) {
+        u64 mftEntriesPerCluster = CLUSTER_SIZE / MFT_SIZE;
+
+        u64 clusterNum = mftEntry / mftEntriesPerCluster;
+        u64 mftOffset = (mftEntry % mftEntriesPerCluster) * MFT_SIZE;
+
+        u64 realCluster = GetNthCluster(mftDataRuns, clusterNum);
+        byteAddress = partitionStart + realCluster * CLUSTER_SIZE + mftOffset;
+    } else {
+        // Assume that the MFT has no breaks
+        byteAddress = partitionStart + mftStart + mftEntry * MFT_SIZE;
+    }
+
+
+    if (lseek64(fd, byteAddress, SEEK_SET) == -1) {
         char errmsg[256];
         sprintf(errmsg, "Unable to seek to MFT entry %llu", mftEntry);
         perror(errmsg);
