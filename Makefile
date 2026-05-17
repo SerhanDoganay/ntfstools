@@ -1,10 +1,10 @@
 SRCS = *.c
 
 all:
-	gcc $(SRCS) -o main
+	gcc $(SRCS) -o ntfstools
 
 debug:
-	gcc -g $(SRCS) -o main
+	gcc -g $(SRCS) -o ntfstools
 
 clean:
 	rm main

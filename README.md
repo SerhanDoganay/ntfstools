@@ -1,4 +1,4 @@
-# An experimental NTFS scanner
+# ntfstools - An experimental NTFS scanner
 
 This software aims to scan a drive, search for any Windows partitions present, and makes a skeleton of the files and directories within it.
 
@@ -13,4 +13,4 @@ Run `make`.
 
 ## Usage
 
-Usage: `./main <drive name>`
+Usage: `./ntfstools <drive name>`

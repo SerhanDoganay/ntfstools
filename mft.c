@@ -130,9 +130,11 @@ u8 printMFTEntry(u64 mftEntryNum, TreeNode *tree) {
 
     if (!filename && !mftEntry.baseMFTEntry) {
         printf("%llu has no name!\n", mftEntryNum);
+        DeleteRuns(fileStruct.dataruns);
         return 1;
     } else if (!filename) {
         // Excusable because this is an "extra" MFT entry
+        DeleteRuns(fileStruct.dataruns);
         return 1;
     }
 
@@ -167,7 +169,9 @@ void printMFTEntries() {
         printMFTEntry(i, tree);
     }
 
+    puts("Creating directory structure...");
     PrintTree(tree);
+    puts("Deallocating resources...");
     DeleteTree(tree, (u32)numEntries);
 
     DeleteRuns(mftFile.dataruns);

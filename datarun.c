@@ -57,26 +57,13 @@ datarun_s *InitializeRuns(u8 *runs) {
 }
 
 void DeleteRuns(datarun_s *runs) {
-    if (!runs) {
-        return;
-    }
-
-    while (runs->next) {
-        datarun_s *curr = runs->next;
-        datarun_s *prev = NULL;
-        while (curr->next) {
-            prev = curr;
-            curr = curr->next;
-        }
-
+    datarun_s *curr = runs;
+    while (curr) {
+        datarun_s *next = curr->next;
+        curr->next = NULL;
         free(curr);
-        if (prev) {
-            prev->next = NULL;
-        } else {
-            runs->next = NULL;
-        }
+        curr = next;
     }
-    free(runs);
 }
 
 u64 GetNthCluster(datarun_s *runs, u64 cluster) {

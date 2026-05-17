@@ -1,12 +1,13 @@
 #include "util.h"
+#include <sys/stat.h>
 #include <locale.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 
-void printUTF16(char16_t *src) {
+char *convertUTF16(char16_t *src) {
     setlocale(LC_ALL, "");
-    char buf[2048]; // Should be big enough?
+    char *buf = (char *)malloc(2048); // Should be big enough?
     char *out = buf;
     mbstate_t state = {0};
 
@@ -16,22 +17,13 @@ void printUTF16(char16_t *src) {
         out += rc;
     }
     *out = '\0';
-    printf("%s", buf);
+    return buf;
 }
 
-void fprintUTF16(char16_t *src, FILE *fptr) {
-    setlocale(LC_ALL, "");
-    char buf[2048]; // Should be big enough?
-    char *out = buf;
-    mbstate_t state = {0};
-
-    while (*src) {
-        size_t rc = c16rtomb(out, *src++, &state);
-        if (rc == (size_t)-1) break;
-        out += rc;
-    }
-    *out = '\0';
-    fprintf(fptr, "%s", buf);
+void printUTF16(char16_t *src) {
+    char *buf = convertUTF16(src);
+    printf("%s", buf);
+    free(buf);
 }
 
 void printGUID(u64 guid1, u64 guid2) {
@@ -127,54 +119,54 @@ void padtext(u32 depth, FILE *fptr) {
     }
 }
 
-void PrintNode(TreeNode *node, u32 depth, FILE *fptr) {
-    u8 isDir = node->children != 0;
+void PrintNode(TreeNode *node) {
+    u8 isLeaf = node->children == 0;
 
-    padfile(depth, fptr);
-    if (isDir) {
-        fprintf(fptr, "<details><summary>");
-    } else {
-        fprintf(fptr, "<p>");
+    char *myname = convertUTF16(node->name);
+    char realname[3000];
+    snprintf(realname, 3000, "[%d] %s", node->mftEntry, myname);
+
+    if (isLeaf) {
+        FILE *fp = fopen(realname, "w");
+        if (!fp) {
+            fprintf(stderr, "Failed to create file!\n");
+            exit(EXIT_FAILURE);
+        }
+        fclose(fp);
+
+        free(myname);
+        return;
     }
 
-    padtext(depth, fptr);
-    fprintf(fptr, "[%d] ", node->mftEntry);
-    fprintUTF16(node->name, fptr);
-    
-    if (isDir) {
-        fprintf(fptr, "</summary>\n");
-    } else {
-        fprintf(fptr, "</p>\n");
-    }
-
-    // printf("%d : ", node->mftEntry);
-    // printUTF16(node->name);
-    // putchar('\n');
-
-    NodeList *child = node->children;
-    while (child) {
-        PrintNode(child->self, depth + 1, fptr);
-        child = child->next;
-    }
-
-    if (isDir) {
-        padfile(depth, fptr);
-        fprintf(fptr, "</details>\n");
-    }
-}
-
-void PrintTree(TreeNode *tree) {
-    FILE *fptr;
-    fptr = fopen("output.html", "w");
-    if (!fptr) {
-        fprintf(stderr, "Failed to open html file!\n");
+    // DIRECTORY (or to be more specific, a non-leaf directory)
+    if (mkdir(realname, 0777) == -1) {
+        perror("mkdir() error");
         exit(EXIT_FAILURE);
     }
 
-    fprintf(fptr, "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n\t<meta charset=\"UTF-8\">\n\t<title>NTFS Files and Directories</title>\n</head>\n<body>\n\t<h1>NTFS Files and Directories</h1>\n");
-    PrintNode(&tree[5], 0, fptr); // Start with the root dir
-    fprintf(fptr, "</body>\n</html>");
-    fclose(fptr);
+    if (chdir(realname) == -1) {
+        perror("chdir() error");
+        exit(EXIT_FAILURE);
+    }
+
+    char cwd[10000];
+    if (getcwd(cwd, sizeof(cwd)) == NULL) {
+        perror("getcwd() error");
+        exit(EXIT_FAILURE);
+    }
+
+    NodeList *child = node->children;
+    while (child) {
+        chdir(cwd);
+        PrintNode(child->self);
+        child = child->next;
+    }
+
+    free(myname);
+}
+
+void PrintTree(TreeNode *tree) {
+    PrintNode(&tree[5]); // Start with the root dir
 }
 
 void DeleteTree(TreeNode *tree, u32 numNodes) {
@@ -182,20 +174,14 @@ void DeleteTree(TreeNode *tree, u32 numNodes) {
         TreeNode *curr = &tree[i];
 
         free(curr->name);
-        while (curr->children) {
-            NodeList *child = curr->children;
-            NodeList *prev = NULL;
-            while (child->next) {
-                prev = child;
-                child = child->next;
-            }
 
+        NodeList *child = curr->children;
+        curr->children = NULL;
+        while (child) {
+            NodeList *next = child->next;
+            child->next = NULL;
             free(child);
-            if (prev) {
-                prev->next = NULL;
-            } else {
-                curr->children = NULL;
-            }
+            child = next;
         }
     }
 
