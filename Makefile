@@ -7,4 +7,4 @@ debug:
 	gcc -g $(SRCS) -o ntfstools
 
 clean:
-	rm main
+	rm ntfstools
